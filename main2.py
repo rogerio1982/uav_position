@@ -28,8 +28,9 @@ for i in range(s):
 alluav = []
 posx = [140, 360, 280]
 posy = [130, 350, 230]
+h=300
 for i in range(uav):
-    uavs = Uavs(i, posx[i], posy[i], 23, 2.4, 20, 50, 30, True, 100, resBlo, False, "False", "implantação", 100, 100, 10, 5, 0) #estrategia pos e alt fixa sem kmeans
+    uavs = Uavs(i, posx[i], posy[i], 23, 2.4, 20, 50, 30, True, 100, resBlo, False, "False", "implantação", h*2, h, 10, 5, 0) #estrategia pos e alt fixa sem kmeans
     alluav.append(uavs)
 
 # 04 alocar usuarios a cada uavbs
