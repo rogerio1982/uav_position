@@ -1,101 +1,156 @@
 import numpy as np
-import random
+import matplotlib.pyplot as plt
+import math
+import time
 
-# Parâmetros do PSO
-num_particles = 20
-max_iter = 50
-c1 = 2
-c2 = 2
-w = 0.5
+# Grava o tempo de início
+start_time = time.time()
 
 # Parâmetros do problema
 num_users = 100
-num_access_points = 3
-area_width = 100
-area_height = 100
+grid_size = 1000
+coverage_radius = 300  # Ajuste conforme necessário
+min_distance_between_points = 200  # Distância mínima entre pontos WiFi
+altura = 50
 
-# Função de avaliação (fitness)
-def evaluate_solution(solution):
-    # Calcular a qualidade da solução (pontos de acesso)
-    # Aqui, a qualidade pode ser medida pela cobertura do sinal para os usuários
-    # Quanto mais usuários estiverem dentro da área de cobertura dos pontos de acesso, melhor
-    coverage = 0
-    for user in users:
-        for access_point in solution:
-            distance = np.linalg.norm(user - access_point)
-            if distance < 10:  # Assumindo um raio de cobertura de 10 unidades
-                coverage += 1
+# Gerar posições aleatórias para usuários
+user_positions = np.random.randint(0, grid_size, size=(num_users, 2))
+
+
+# Função para calcular a distância entre dois pontos
+def calculate_distance(point1, point2):
+    return np.linalg.norm(point1 - point2)
+
+
+# Função para calcular o path loss usando o modelo SUI
+def calculate_pathloss_sui(user_pos, wifi_pos, frequency, d):
+    # Parâmetros do modelo SUI
+    alpha = 4.0  # Expoente do caminho (path) - relacionado ao ambiente urbano
+    beta_user = 0.0065 * 50  # Atenuação devida à altura da antena do usuário (50 metros)
+    beta_bs = 0  # Atenuação devida à altura da antena da estação base
+    gamma = 0  # Constante
+
+    # Cálculo do path loss usando o modelo SUI
+    delta_f = 20 * math.log10(frequency) + 20 * math.log10(d) + 20 * math.log10(4 * math.pi / 3e8) - 147.55
+    pathloss = delta_f + 10 * alpha * math.log10(d) + beta_user - beta_bs - gamma
+
+    return pathloss
+
+
+# Função de aptidão
+def fitness(wifi_positions, user_positions):
+    signal_power = -100
+    noise_power = 10  # Adicionamos uma potência de ruído constante para simplificar o exemplo
+    frequency = 2.5
+    total_users_connected = 0
+    connected_users = set()
+
+    for user_pos in user_positions:
+        max_snr = float('-inf')
+
+        for wifi_pos in wifi_positions:
+            distance = calculate_distance(user_pos, wifi_pos)
+            pathloss_sui = calculate_pathloss_sui(user_pos, wifi_pos, frequency, distance)
+            received_power = signal_power - pathloss_sui
+            snr = received_power - noise_power
+
+            if snr > 25:
+                connected_users.add(tuple(user_pos))
                 break
-    return coverage
 
-# Inicialização dos usuários em posições aleatórias
-users = np.random.rand(num_users, 2) * area_width
+    total_users_connected = len(connected_users)
+    return total_users_connected, len(wifi_positions)
 
-# Função de inicialização das partículas
-def initialize_particles():
-    particles = []
-    for _ in range(num_particles):
-        particle = np.random.rand(num_access_points, 2) * area_width
-        particles.append(particle)
+
+# Função para inicializar as partículas
+def initialize_particles(num_particles, space_boundaries):
+    particles = np.random.uniform(low=space_boundaries[0], high=space_boundaries[1],
+                                  size=(num_particles, 8)) #aqui altera a quant uav ex: 10->5 uavs
     return particles
 
+
+# Função de atualização da velocidade
+def update_velocity(particle, velocity, personal_best, global_best, inertia_weight, cognitive_weight, social_weight):
+    inertia_term = inertia_weight * velocity
+    cognitive_term = cognitive_weight * np.random.rand() * (personal_best - particle)
+    social_term = social_weight * np.random.rand() * (global_best - particle)
+    new_velocity = inertia_term + cognitive_term + social_term
+    return new_velocity
+
+
+# Função de atualização da posição
+def update_position(particle, velocity, space_boundaries):
+    new_position = particle + velocity
+    # Garantir que as novas posições estejam dentro dos limites do espaço
+    new_position = np.clip(new_position, space_boundaries[0], space_boundaries[1])
+    return new_position
+
+
+# Parâmetros do PSO
+num_particles = 30
+max_iterations = 100
+space_boundaries = (0, grid_size)  # Limites do espaço bidimensional
+
+# Inicialização das partículas e velocidades
+particles = initialize_particles(num_particles, space_boundaries)
+particles_velocity = np.zeros_like(particles)  # Inicialização das velocidades das partículas
+
+# Inicialização dos melhores resultados pessoais e globais
+personal_best_positions = particles.copy()
+personal_best_fitness = np.zeros(num_particles)
+global_best_position = np.zeros(10)
+global_best_fitness = -np.inf
+
+# Lista para armazenar a evolução do fitness
+fitness_evolution = []
+
 # Algoritmo PSO
-def pso():
-    particles = initialize_particles()
-    global_best_position = None
-    global_best_fitness = -1
+for iteration in range(max_iterations):
+    for i in range(num_particles):
+        # Avaliação da função de fitness para cada partícula
+        wifi_positions = particles[i].reshape(-1, 2)
+        total_users_connected, num_wifi_points = fitness(wifi_positions, user_positions)
+        fitness_score = total_users_connected
 
-    for _ in range(max_iter):
-        for particle in particles:
-            fitness = evaluate_solution(particle)
-            if fitness > global_best_fitness:
-                global_best_fitness = fitness
-                global_best_position = particle
+        # Atualização do melhor pessoal
+        if fitness_score > personal_best_fitness[i]:
+            personal_best_fitness[i] = fitness_score
+            personal_best_positions[i] = particles[i].copy()
 
-        for particle in particles:
-            # Atualizar velocidades e posições das partículas
-            velocity = w * particle + c1 * random.random() * (global_best_position - particle) + c2 * random.random() * (global_best_position - particle)
-            particle += velocity
+        # Atualização do melhor global
+        if fitness_score > global_best_fitness:
+            global_best_fitness = fitness_score
+            global_best_position = particles[i].copy()
 
-    return global_best_position
+        # Atualização da velocidade e posição da partícula
+        inertia_weight = 0.3
+        cognitive_weight = 0.5
+        social_weight = 0.8
 
-# Executar o algoritmo PSO
-best_solution = pso()
-print("Melhor solução encontrada:")
-print(best_solution)
+        new_velocity = update_velocity(
+            particles[i], particles_velocity[i], personal_best_positions[i], global_best_position,
+            inertia_weight, cognitive_weight, social_weight)
+        particles[i] = update_position(particles[i], new_velocity, space_boundaries)
 
+    # Armazenar o fitness atual na lista de evolução
+    fitness_evolution.append(global_best_fitness)
 
-import numpy as np
-import matplotlib.pyplot as plt
+# Resultado final
+print("Melhor posição dos pontos de acesso:", global_best_position)
+print("Fitness máximo alcançado:", global_best_fitness)
 
-# Parâmetros do problema
-num_users = 100
-num_access_points = 3
-area_width = 100
-area_height = 100
+# Plotar o resultado
+plt.figure(figsize=(8, 8))
+plt.scatter(user_positions[:, 0], user_positions[:, 1], marker='o', label='Usuários')
+plt.scatter(global_best_position[::2], global_best_position[1::2], marker='x', color='red', label='Pontos de Acesso')
+for i in range(0, len(global_best_position), 2):
+    circle = plt.Circle((global_best_position[i], global_best_position[i + 1]), coverage_radius, color='gray',
+                        alpha=0.2)
+    plt.gca().add_patch(circle)
 
-# Inicialização dos usuários em posições aleatórias
-users = np.random.rand(num_users, 2) * area_width
-
-# Melhor solução encontrada pelo PSO (posição dos pontos de acesso)
-best_solution = np.array([[30, 30], [70, 70], [50, 20]])  # Exemplo de posição dos pontos de acesso
-
-# Plotar os usuários
-plt.scatter(users[:, 0], users[:, 1], color='blue', label='Usuários')
-
-# Plotar os pontos de acesso
-plt.scatter(best_solution[:, 0], best_solution[:, 1], color='red', marker='s', label='Pontos de Acesso')
-
-# Plotar os raios de cobertura dos pontos de acesso
-for point in best_solution:
-    circle = plt.Circle((point[0], point[1]), 10, color='red', fill=False)  # Raio de cobertura de 10 unidades
-    plt.gca().add_artist(circle)
-
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.title('Posições dos Pontos de Acesso e Usuários')
+plt.title('Maximiza área de cobertura')
+plt.xlabel('Coordenada X')
+plt.ylabel('Coordenada Y')
 plt.legend()
 plt.grid(True)
-plt.xlim(0, area_width)
-plt.ylim(0, area_height)
 plt.show()
