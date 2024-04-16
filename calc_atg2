@@ -1,0 +1,50 @@
+
+def calculate_pathloss_atg(user_pos, wifi_pos, D):
+    white_noise = 7.4e-13
+    # Interefência gerada por outras células
+    interference = 0
+    frequency = 2.5
+    I = 0  # Interferencia gerada por outras células
+    receiving_antenna_height = 1.6  # Altura da antena receptora em metros
+    base_station_height = 50  # Altura da EstaçãoBase  # Altura da estação base
+    f = 2.4  # S.F / 1e9
+    env = 2
+
+    ax = [15, 11, 5, 5]
+    bx = [.16, .18, .3, .3]
+    a = ax[env]
+    b = bx[env]
+    # ====antenna loss=====================
+    A = 1  # to calculate with, A=0 to calculate without antenna loss
+    # =========max antenna gain=============%
+    Go = 2.4  # 2.15
+    # =============antenna 3db bandwidth=======%
+    seta_3db = 20  # 76
+    # ==reflection loss===================%
+    L_r = .3
+
+    # antigo
+    WN = 7.4e-13  # Ruído Branco (CORRIGIR)
+    D0 = 100  # Distância Referência
+    Sv = 9.4  # 8.2 to 10.6 dB
+    E = 16  # Equalizado
+
+    #pathloss = math.atan((base_station_height - base_station_height) / D)
+    seta = math.atan((base_station_height - base_station_height) / D)
+
+    pathloss = (-147.5 + 20 * math.log10(f) + 20 * math.log10(D) - 20 * math.log10(math.cos(math.pi / 180 * seta))) \
+           - A * (2 * Go - (12 * ((seta) / seta_3db) ** 2) - (12 * ((seta) / seta_3db) ** 2)) \
+ \
+           + 20 * math.log10(
+        (10 ** ((-68.8 + 10 * math.log10(f) + 10 * math.log10(base_station_height - receiving_antenna_height) \
+                 + 20 * math.log10(math.cos(math.pi * seta / 180)) - 10 * math.log10(
+                    1 + math.sqrt(2) / (L_r ** 2))) / 20) * (1 - (1 / (a * math.exp(-b * (seta - a)) + 1)))) \
+        + (1 * (1 / (a * math.exp(-b * (seta - a)) + 1))))
+    rp=23
+    Pw = 10 ** ((rp - pathloss) / 10) / 1000
+
+    Pdbm = -(10 * math.log10(1000 * Pw))
+    #print(Pdbm)
+
+    return Pdbm
+
