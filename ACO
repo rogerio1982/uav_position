@@ -1,0 +1,102 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+
+def ACO(num_iterations, num_ants, grid_size, users, evaporation_rate=0.5, pheromone_deposit=1, alpha=1, beta=1):
+    best_solution = None
+    best_score = -1
+    pheromones = np.ones((grid_size, grid_size))
+
+    for _ in range(num_iterations):
+        for _ in range(num_ants):
+            access_points = generate_access_points(grid_size, min_distance, qtd_uav)
+            score = evaluate_solution(access_points, users, raio)
+            if score > best_score:
+                best_score = score
+                best_solution = access_points
+            update_pheromones(pheromones, access_points, score, pheromone_deposit)
+        pheromones *= (1 - evaporation_rate)
+    return best_solution, best_score
+
+def calculate_pathloss_sui(user_pos, wifi_pos, frequency, d):
+    alpha = 4.0
+    beta_user = 0.0065 * 50
+    beta_bs = 0
+    gamma = 0
+
+    delta_f = 20 * math.log10(frequency) + 20 * math.log10(d) + 20 * math.log10(4 * math.pi / 3e8) - 147.55
+    pathloss = delta_f + 10 * alpha * math.log10(d) + beta_user - beta_bs - gamma
+    return pathloss
+
+def calculate_snr(path_loss, noise_power):
+    snr_db = 10 * np.log10(path_loss / noise_power)
+    return snr_db
+
+def generate_access_points(grid_size, min_distance, qtd):
+    access_points = []
+    while len(access_points) < qtd:
+        point = np.random.randint(grid_size, size=2)
+        if all(np.linalg.norm(np.array(point) - np.array(ap)) > min_distance for ap in access_points):
+            access_points.append(point)
+    return np.array(access_points)
+
+def evaluate_solution(access_points, users, raio):
+    noise_power = 10
+    frequency = 2.5
+    users_connected = np.zeros(len(access_points))
+    users_already_connected = []
+
+    for i, access_point in enumerate(access_points):
+        for j, user in enumerate(users):
+            if j not in users_already_connected:
+                distance = np.linalg.norm(access_point - user)
+                path_loss_value = calculate_pathloss_sui(user, access_point, frequency, distance)
+                snr = calculate_snr(abs(path_loss_value), noise_power)
+                if snr >= 10 and distance <= raio:
+                    users_connected[i] += 1
+                    users_already_connected.append(j)
+    return np.sum(users_connected)
+
+def update_pheromones(pheromones, access_points, score, pheromone_deposit):
+    for point in access_points:
+        pheromones[point[0], point[1]] += pheromone_deposit * score
+
+def plot_coverage_radius(solution, raio):
+    for point in solution:
+        circle = plt.Circle((point[1], point[0]), raio, color='r', fill=False)
+        plt.gca().add_patch(circle)
+
+grid_size = 1000
+num_users = 100
+num_iterations = 50
+num_ants = 50
+evaporation_rate = 0.5
+pheromone_deposit = 5
+raio = 300
+min_distance = 200
+qtd_uav = 4 #<== altera a quantidade de drones
+
+np.random.seed(42)
+users = np.random.randint(0, grid_size, size=(num_users, 2))
+np.random.seed(None)
+
+best_solution, best_score = ACO(num_iterations, num_ants, grid_size, users, evaporation_rate, pheromone_deposit)
+
+print("Melhor solução encontrada:")
+print(best_solution)
+print("Pontuação da melhor solução:", best_score)
+
+plt.figure(figsize=(8, 8))
+for user in users:
+    plt.plot(user[1], user[0], 'bo')
+for point in best_solution:
+    plt.plot(point[1], point[0], 'ro')
+plot_coverage_radius(best_solution, raio)
+plt.xlim(0, grid_size)
+plt.ylim(0, grid_size)
+plt.gca().set_aspect('equal', adjustable='box')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.title('Pontos de Acesso com Raio de Cobertura e Usuários')
+plt.grid(True)
+plt.show()
